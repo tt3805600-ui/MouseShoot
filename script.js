@@ -1,13 +1,14 @@
-const TARGET_SIZE = 40;
+const CONFIG_PATH = "config.json";
+const DEFAULT_TARGET_COUNT = 3;
 
 const playArea = document.getElementById("play-area");
-const countInput = document.getElementById("count-input");
-const speedInput = document.getElementById("speed-input");
-const lifetimeInput = document.getElementById("lifetime-input");
 const startButton = document.getElementById("start-button");
 const stopButton = document.getElementById("stop-button");
 const scoreValue = document.getElementById("score-value");
 const statusText = document.getElementById("status-text");
+const difficultyRadios = document.querySelectorAll('input[name="difficulty"]');
+
+startButton.disabled = true;
 
 const state = {
   running: false,
@@ -15,13 +16,25 @@ const state = {
   frameId: null,
   lastTimestamp: null,
   score: 0,
-  desiredCount: 3,
+  desiredCount: DEFAULT_TARGET_COUNT,
   speed: 200,
   lifetimeSeconds: 2,
+  targetSize: 60,
+  config: {},
+  currentDifficulty: "simple",
+  configLoaded: false,
 };
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+function getDifficultyLabel(key) {
+  const entry = state.config[key];
+  if (entry && entry.label) {
+    return entry.label;
+  }
+  return key;
 }
 
 function updateScoreDisplay() {
@@ -32,24 +45,51 @@ function updateStatus(message) {
   statusText.textContent = message;
 }
 
-function readSettings() {
-  const count = clamp(Number(countInput.value) || 1, Number(countInput.min), Number(countInput.max));
-  const speed = clamp(Number(speedInput.value) || 10, Number(speedInput.min), Number(speedInput.max));
-  const lifetime = clamp(Number(lifetimeInput.value) || 0.5, Number(lifetimeInput.min), Number(lifetimeInput.max));
-  return { count, speed, lifetime };
-}
+function setDifficulty(difficultyKey) {
+  const configEntry = state.config[difficultyKey];
+  if (!configEntry) {
+    return false;
+  }
 
-function applySettings(settings) {
-  state.desiredCount = settings.count;
-  state.speed = settings.speed;
-  state.lifetimeSeconds = settings.lifetime;
+  state.currentDifficulty = difficultyKey;
+  state.speed = Number(configEntry.speed) || state.speed;
+  state.lifetimeSeconds = Number(configEntry.lifetime) || state.lifetimeSeconds;
+  state.targetSize = Number(configEntry.size) || state.targetSize;
+  const countValue = Number(configEntry.count);
+  state.desiredCount = Number.isFinite(countValue) && countValue > 0 ? countValue : DEFAULT_TARGET_COUNT;
+
+  document.documentElement.style.setProperty("--target-size", `${state.targetSize}px`);
+
+  if (state.running) {
+    const now = performance.now();
+    const width = playArea.clientWidth;
+    const height = playArea.clientHeight;
+    state.targets.forEach((data, element) => {
+      const angle = Math.atan2(data.vy, data.vx) || 0;
+      data.vx = Math.cos(angle) * state.speed;
+      data.vy = Math.sin(angle) * state.speed;
+      data.createdAt = now;
+      data.lifetime = state.lifetimeSeconds * 1000;
+      data.x = clamp(data.x, 0, Math.max(0, width - state.targetSize));
+      data.y = clamp(data.y, 0, Math.max(0, height - state.targetSize));
+      element.style.left = `${data.x}px`;
+      element.style.top = `${data.y}px`;
+    });
+    ensureTargetCount();
+  }
+
+  difficultyRadios.forEach((radio) => {
+    radio.checked = radio.value === difficultyKey;
+  });
+
+  return true;
 }
 
 function startGame() {
-  const settings = readSettings();
-  countInput.value = String(settings.count);
-  speedInput.value = String(settings.speed);
-  lifetimeInput.value = String(settings.lifetime);
+  if (!state.configLoaded) {
+    updateStatus("配置尚未加载完成，请稍后再试。");
+    return;
+  }
 
   if (state.running) {
     stopGame(false);
@@ -57,11 +97,10 @@ function startGame() {
 
   state.score = 0;
   updateScoreDisplay();
-  applySettings(settings);
 
   state.running = true;
   state.lastTimestamp = null;
-  updateStatus("训练进行中，尽可能多地点击小圆！");
+  updateStatus(`当前难度：${getDifficultyLabel(state.currentDifficulty)}，尽可能多地点击小圆！`);
 
   ensureTargetCount();
   state.frameId = requestAnimationFrame(animationLoop);
@@ -110,8 +149,9 @@ function spawnTarget(areaWidth, areaHeight) {
   const element = document.createElement("div");
   element.className = "target";
 
-  const maxX = Math.max(0, areaWidth - TARGET_SIZE);
-  const maxY = Math.max(0, areaHeight - TARGET_SIZE);
+  const size = state.targetSize;
+  const maxX = Math.max(0, areaWidth - size);
+  const maxY = Math.max(0, areaHeight - size);
   const x = Math.random() * maxX;
   const y = Math.random() * maxY;
   const angle = Math.random() * Math.PI * 2;
@@ -175,6 +215,7 @@ function animationLoop(timestamp) {
   const width = playArea.clientWidth;
   const height = playArea.clientHeight;
   const now = performance.now();
+  const size = state.targetSize;
 
   const expired = [];
 
@@ -186,16 +227,16 @@ function animationLoop(timestamp) {
       data.x = 0;
       data.vx *= -1;
     }
-    if (data.x >= width - TARGET_SIZE && data.vx > 0) {
-      data.x = width - TARGET_SIZE;
+    if (data.x >= width - size && data.vx > 0) {
+      data.x = width - size;
       data.vx *= -1;
     }
     if (data.y <= 0 && data.vy < 0) {
       data.y = 0;
       data.vy *= -1;
     }
-    if (data.y >= height - TARGET_SIZE && data.vy > 0) {
-      data.y = height - TARGET_SIZE;
+    if (data.y >= height - size && data.vy > 0) {
+      data.y = height - size;
       data.vy *= -1;
     }
 
@@ -213,6 +254,31 @@ function animationLoop(timestamp) {
   state.frameId = requestAnimationFrame(animationLoop);
 }
 
+async function initialize() {
+  try {
+    const response = await fetch(CONFIG_PATH, { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error(`加载配置失败：${response.status}`);
+    }
+    const config = await response.json();
+    state.config = config;
+    if (!config[state.currentDifficulty]) {
+      const firstKey = Object.keys(config)[0];
+      if (firstKey) {
+        state.currentDifficulty = firstKey;
+      }
+    }
+    state.configLoaded = true;
+    setDifficulty(state.currentDifficulty);
+    startButton.disabled = false;
+    updateStatus(`配置已加载，当前难度：${getDifficultyLabel(state.currentDifficulty)}。`);
+  } catch (error) {
+    console.error(error);
+    updateStatus("配置加载失败，请刷新页面重试。");
+    startButton.disabled = true;
+  }
+}
+
 startButton.addEventListener("click", () => {
   startGame();
 });
@@ -221,26 +287,29 @@ stopButton.addEventListener("click", () => {
   stopGame(true);
 });
 
-[countInput, speedInput, lifetimeInput].forEach((input) => {
-  input.addEventListener("change", () => {
-    const settings = readSettings();
-    countInput.value = String(settings.count);
-    speedInput.value = String(settings.speed);
-    lifetimeInput.value = String(settings.lifetime);
-    applySettings(settings);
-    if (state.running) {
-      const now = performance.now();
-      state.targets.forEach((data) => {
-        const angle = Math.atan2(data.vy, data.vx);
-        data.vx = Math.cos(angle) * state.speed;
-        data.vy = Math.sin(angle) * state.speed;
-        data.createdAt = now;
-        data.lifetime = state.lifetimeSeconds * 1000;
+difficultyRadios.forEach((radio) => {
+  radio.addEventListener("change", () => {
+    if (!radio.checked) {
+      return;
+    }
+    if (!state.configLoaded) {
+      updateStatus("配置尚未加载完成，请稍后再试。");
+      difficultyRadios.forEach((other) => {
+        other.checked = other.value === state.currentDifficulty;
       });
-      ensureTargetCount();
-      updateStatus("参数已更新，继续加油！");
+      return;
+    }
+    const changed = setDifficulty(radio.value);
+    if (!changed) {
+      return;
+    }
+    if (state.running) {
+      updateStatus(`已切换到${getDifficultyLabel(radio.value)}难度，继续加油！`);
+    } else {
+      updateStatus(`已选择${getDifficultyLabel(radio.value)}难度，点击“开始训练”开始游戏。`);
     }
   });
 });
 
-updateStatus("点击“开始训练”开始游戏。");
+updateScoreDisplay();
+initialize();

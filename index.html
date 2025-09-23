@@ -10,26 +10,29 @@
     <main class="app">
       <section class="control-panel">
         <h1>鼠标点击训练</h1>
-        <div class="controls">
-          <label>
-            同时出现的小圆个数：
-            <input id="count-input" type="number" min="1" max="20" value="3" />
-          </label>
-          <label>
-            小圆移动速度（像素/秒）：
-            <input id="speed-input" type="number" min="10" max="800" value="200" />
-          </label>
-          <label>
-            小圆存在时间（秒）：
-            <input id="lifetime-input" type="number" min="0.5" max="10" step="0.1" value="2" />
-          </label>
+        <div class="difficulty" id="difficulty-container">
+          <p class="difficulty-title">选择难度：</p>
+          <div class="difficulty-options" role="radiogroup" aria-labelledby="difficulty-container">
+            <label class="difficulty-option">
+              <input type="radio" name="difficulty" value="simple" checked />
+              <span>简单</span>
+            </label>
+            <label class="difficulty-option">
+              <input type="radio" name="difficulty" value="normal" />
+              <span>普通</span>
+            </label>
+            <label class="difficulty-option">
+              <input type="radio" name="difficulty" value="hard" />
+              <span>困难</span>
+            </label>
+          </div>
         </div>
         <div class="actions">
           <button id="start-button" type="button">开始训练</button>
           <button id="stop-button" type="button">停止</button>
         </div>
         <p class="score">得分：<span id="score-value">0</span></p>
-        <p class="status" id="status-text">点击“开始训练”开始游戏。</p>
+        <p class="status" id="status-text">正在加载配置…</p>
       </section>
       <section class="play-area" id="play-area" aria-label="训练区域"></section>
     </main>

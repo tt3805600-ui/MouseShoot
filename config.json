@@ -1,0 +1,20 @@
+{
+  "simple": {
+    "label": "简单",
+    "size": 100,
+    "speed": 200,
+    "lifetime": 2
+  },
+  "normal": {
+    "label": "普通",
+    "size": 70,
+    "speed": 300,
+    "lifetime": 1.5
+  },
+  "hard": {
+    "label": "困难",
+    "size": 50,
+    "speed": 450,
+    "lifetime": 1
+  }
+}
