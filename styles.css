@@ -2,10 +2,13 @@
   color-scheme: light dark;
   font-family: "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --panel-width: 320px;
-  --target-size: 60px;
+  --target-width: 60px;
+  --target-height: 108px;
   --bg-color: #f4f5f7;
   --panel-color: rgba(255, 255, 255, 0.85);
   --accent: #0070f3;
+  --target-primary: #1f86ff;
+  --target-secondary: #4ca3ff;
 }
 
 * {
@@ -150,18 +153,83 @@ button:active {
 
 .target {
   position: absolute;
-  width: var(--target-size);
-  height: var(--target-size);
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.9), rgba(0, 112, 243, 0.85));
+  width: var(--target-width);
+  height: var(--target-height);
+  pointer-events: none;
+}
+
+.target-part {
+  position: absolute;
+  pointer-events: auto;
+  background: linear-gradient(135deg, var(--target-primary), var(--target-secondary));
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
   cursor: pointer;
   user-select: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: bold;
+  transition: transform 0.1s ease;
+}
+
+.target-part:active {
+  transform: scale(0.95);
+}
+
+.target-head {
+  width: 44%;
+  height: 28%;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  z-index: 3;
+}
+
+.target-body {
+  width: 38%;
+  height: 36%;
+  top: 28%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 45% 45% 20% 20% / 50% 50% 20% 20%;
+  z-index: 2;
+}
+
+.target-limb {
+  width: 18%;
+  border-radius: 999px;
+  z-index: 1;
+}
+
+.target-arm {
+  height: 32%;
+  top: 32%;
+}
+
+.target-arm-left {
+  left: 4%;
+  transform-origin: top center;
+  transform: rotate(8deg);
+}
+
+.target-arm-right {
+  right: 4%;
+  transform-origin: top center;
+  transform: rotate(-8deg);
+}
+
+.target-leg {
+  height: 40%;
+  bottom: 0;
+}
+
+.target-leg-left {
+  left: 26%;
+  transform-origin: top center;
+  transform: rotate(6deg);
+}
+
+.target-leg-right {
+  right: 26%;
+  transform-origin: top center;
+  transform: rotate(-6deg);
 }
 
 @media (max-width: 900px) {

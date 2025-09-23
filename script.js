@@ -1,5 +1,16 @@
 const CONFIG_PATH = "config.json";
 const DEFAULT_TARGET_COUNT = 3;
+const FIGURE_HEIGHT_RATIO = 1.8;
+const DEFAULT_SCORES = {
+  head: 3,
+  body: 2,
+  four: 1,
+};
+const SCORE_LABELS = {
+  head: "头部",
+  body: "躯干",
+  four: "四肢",
+};
 
 const playArea = document.getElementById("play-area");
 const startButton = document.getElementById("start-button");
@@ -20,6 +31,8 @@ const state = {
   speed: 200,
   lifetimeSeconds: 2,
   targetSize: 60,
+  targetHeight: Math.round(60 * FIGURE_HEIGHT_RATIO),
+  scores: { ...DEFAULT_SCORES },
   config: {},
   currentDifficulty: "simple",
   configLoaded: false,
@@ -54,11 +67,30 @@ function setDifficulty(difficultyKey) {
   state.currentDifficulty = difficultyKey;
   state.speed = Number(configEntry.speed) || state.speed;
   state.lifetimeSeconds = Number(configEntry.lifetime) || state.lifetimeSeconds;
-  state.targetSize = Number(configEntry.size) || state.targetSize;
+
+  const sizeValue = Number(configEntry.size);
+  if (Number.isFinite(sizeValue) && sizeValue > 0) {
+    state.targetSize = sizeValue;
+  }
+  state.targetHeight = Math.round(state.targetSize * FIGURE_HEIGHT_RATIO);
+
+  const mergedScores = {
+    ...DEFAULT_SCORES,
+    ...(configEntry.scores || {}),
+  };
+  const headScore = Number(mergedScores.head);
+  const bodyScore = Number(mergedScores.body);
+  const limbScore = Number(mergedScores.four);
+  state.scores = {
+    head: Number.isFinite(headScore) ? headScore : DEFAULT_SCORES.head,
+    body: Number.isFinite(bodyScore) ? bodyScore : DEFAULT_SCORES.body,
+    four: Number.isFinite(limbScore) ? limbScore : DEFAULT_SCORES.four,
+  };
   const countValue = Number(configEntry.count);
   state.desiredCount = Number.isFinite(countValue) && countValue > 0 ? countValue : DEFAULT_TARGET_COUNT;
 
-  document.documentElement.style.setProperty("--target-size", `${state.targetSize}px`);
+  document.documentElement.style.setProperty("--target-width", `${state.targetSize}px`);
+  document.documentElement.style.setProperty("--target-height", `${state.targetHeight}px`);
 
   if (state.running) {
     const now = performance.now();
@@ -70,8 +102,12 @@ function setDifficulty(difficultyKey) {
       data.vy = Math.sin(angle) * state.speed;
       data.createdAt = now;
       data.lifetime = state.lifetimeSeconds * 1000;
-      data.x = clamp(data.x, 0, Math.max(0, width - state.targetSize));
-      data.y = clamp(data.y, 0, Math.max(0, height - state.targetSize));
+      data.width = state.targetSize;
+      data.height = state.targetHeight;
+      element.style.width = `${state.targetSize}px`;
+      element.style.height = `${state.targetHeight}px`;
+      data.x = clamp(data.x, 0, Math.max(0, width - data.width));
+      data.y = clamp(data.y, 0, Math.max(0, height - data.height));
       element.style.left = `${data.x}px`;
       element.style.top = `${data.y}px`;
     });
@@ -83,6 +119,50 @@ function setDifficulty(difficultyKey) {
   });
 
   return true;
+}
+
+function getScoreForPart(partKey) {
+  const value = Number(state.scores?.[partKey]);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function getPartLabel(partKey) {
+  return SCORE_LABELS[partKey] || partKey;
+}
+
+function handleTargetHit(element, partKey) {
+  if (!state.running || !state.targets.has(element)) {
+    return;
+  }
+
+  const scoreValue = getScoreForPart(partKey);
+  state.score += scoreValue;
+  updateScoreDisplay();
+  const deltaText = scoreValue >= 0 ? `+${scoreValue}` : `${scoreValue}`;
+  updateStatus(`击中了${getPartLabel(partKey)}！${deltaText}分。`);
+  removeTarget(element, true);
+}
+
+function createTargetFigure(element) {
+  const parts = [
+    { className: "target-part target-head", key: "head" },
+    { className: "target-part target-body", key: "body" },
+    { className: "target-part target-limb target-arm target-arm-left", key: "four" },
+    { className: "target-part target-limb target-arm target-arm-right", key: "four" },
+    { className: "target-part target-limb target-leg target-leg-left", key: "four" },
+    { className: "target-part target-limb target-leg target-leg-right", key: "four" },
+  ];
+
+  parts.forEach((part) => {
+    const partElement = document.createElement("div");
+    partElement.className = part.className;
+    partElement.dataset.part = part.key;
+    partElement.addEventListener("click", (event) => {
+      event.stopPropagation();
+      handleTargetHit(element, part.key);
+    });
+    element.appendChild(partElement);
+  });
 }
 
 function startGame() {
@@ -100,7 +180,7 @@ function startGame() {
 
   state.running = true;
   state.lastTimestamp = null;
-  updateStatus(`当前难度：${getDifficultyLabel(state.currentDifficulty)}，尽可能多地点击小圆！`);
+  updateStatus(`当前难度：${getDifficultyLabel(state.currentDifficulty)}，尽可能多地点击人形目标！`);
 
   ensureTargetCount();
   state.frameId = requestAnimationFrame(animationLoop);
@@ -149,9 +229,10 @@ function spawnTarget(areaWidth, areaHeight) {
   const element = document.createElement("div");
   element.className = "target";
 
-  const size = state.targetSize;
-  const maxX = Math.max(0, areaWidth - size);
-  const maxY = Math.max(0, areaHeight - size);
+  const width = state.targetSize;
+  const height = state.targetHeight;
+  const maxX = Math.max(0, areaWidth - width);
+  const maxY = Math.max(0, areaHeight - height);
   const x = Math.random() * maxX;
   const y = Math.random() * maxY;
   const angle = Math.random() * Math.PI * 2;
@@ -159,9 +240,12 @@ function spawnTarget(areaWidth, areaHeight) {
   const vx = Math.cos(angle) * speed;
   const vy = Math.sin(angle) * speed;
 
+  element.style.width = `${width}px`;
+  element.style.height = `${height}px`;
   element.style.left = `${x}px`;
   element.style.top = `${y}px`;
 
+  createTargetFigure(element);
   playArea.appendChild(element);
 
   const targetData = {
@@ -171,20 +255,11 @@ function spawnTarget(areaWidth, areaHeight) {
     vy,
     createdAt: performance.now(),
     lifetime: state.lifetimeSeconds * 1000,
+    width,
+    height,
   };
 
   state.targets.set(element, targetData);
-
-  element.addEventListener("click", (event) => {
-    event.stopPropagation();
-    if (!state.running || !state.targets.has(element)) {
-      return;
-    }
-    state.score += 1;
-    updateScoreDisplay();
-    updateStatus("好样的！继续点击目标。");
-    removeTarget(element, true);
-  });
 }
 
 function removeTarget(element, shouldRespawn) {
@@ -215,11 +290,14 @@ function animationLoop(timestamp) {
   const width = playArea.clientWidth;
   const height = playArea.clientHeight;
   const now = performance.now();
-  const size = state.targetSize;
 
   const expired = [];
 
   state.targets.forEach((data, element) => {
+    const targetWidth = data.width ?? state.targetSize;
+    const targetHeight = data.height ?? state.targetHeight;
+    data.width = targetWidth;
+    data.height = targetHeight;
     data.x += data.vx * delta;
     data.y += data.vy * delta;
 
@@ -227,16 +305,16 @@ function animationLoop(timestamp) {
       data.x = 0;
       data.vx *= -1;
     }
-    if (data.x >= width - size && data.vx > 0) {
-      data.x = width - size;
+    if (data.x >= width - targetWidth && data.vx > 0) {
+      data.x = width - targetWidth;
       data.vx *= -1;
     }
     if (data.y <= 0 && data.vy < 0) {
       data.y = 0;
       data.vy *= -1;
     }
-    if (data.y >= height - size && data.vy > 0) {
-      data.y = height - size;
+    if (data.y >= height - targetHeight && data.vy > 0) {
+      data.y = height - targetHeight;
       data.vy *= -1;
     }
 
