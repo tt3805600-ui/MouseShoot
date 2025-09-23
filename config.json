@@ -3,18 +3,33 @@
     "label": "简单",
     "size": 100,
     "speed": 200,
-    "lifetime": 2
+    "lifetime": 2,
+    "scores": {
+      "head": 3,
+      "body": 2,
+      "four": 1
+    }
   },
   "normal": {
     "label": "普通",
     "size": 70,
     "speed": 300,
-    "lifetime": 1.5
+    "lifetime": 1.5,
+    "scores": {
+      "head": 4,
+      "body": 3,
+      "four": 2
+    }
   },
   "hard": {
     "label": "困难",
     "size": 50,
     "speed": 450,
-    "lifetime": 1
+    "lifetime": 1,
+    "scores": {
+      "head": 5,
+      "body": 4,
+      "four": 3
+    }
   }
 }
